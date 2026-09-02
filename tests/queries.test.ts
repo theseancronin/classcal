@@ -1,10 +1,11 @@
 /**
- * The read layer and notification reconciliation, against real SQLite.
+ * The read layer and notification reconciliation, against real Postgres.
  */
 import { readFileSync } from 'node:fs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { createNodeSqlDatabase, type NodeSqlDatabase } from '@/db/nodeSqlite';
+import { type PgliteDatabase } from '@/db/pglite';
+import { createTestDatabase, truncateAll } from './support/database';
 import { getScheduledKeys, queryEvents } from '@/db/repository';
 import { migrate } from '@/db/schema';
 import { HeuristicCalendarEventInterpreter } from '@/interpreter/heuristic';
@@ -14,11 +15,14 @@ import { syncCalendar } from '@/pipeline/sync';
 
 const FIXTURE = readFileSync(new URL('../fixtures/gsmnc-sample.ics', import.meta.url), 'utf8');
 
-let db: NodeSqlDatabase;
+let db: PgliteDatabase;
+
+beforeAll(async () => {
+  db = await createTestDatabase();
+});
 
 beforeEach(async () => {
-  db = createNodeSqlDatabase();
-  await migrate(db);
+  await truncateAll(db);
   await syncCalendar({
     db,
     interpreter: new HeuristicCalendarEventInterpreter(),
@@ -27,8 +31,8 @@ beforeEach(async () => {
   });
 });
 
-afterEach(() => {
-  db.close();
+afterAll(async () => {
+  await db.close();
 });
 
 describe('class filtering', () => {

@@ -1,8 +1,0 @@
-node_modules
-.next
-.env
-.env.local
-next-env.d.ts
-smoke-report.json
-.pglite
-.next

@@ -1,356 +1,157 @@
+'use client';
+
 /**
- * Shared presentational components.
+ * Shared presentation pieces.
  *
- * All calendar text is rendered through React Native `<Text>`, which escapes
- * content by construction -- there is no HTML renderer anywhere in the app, so
- * markup in a calendar entry is displayed as literal characters and can never
- * execute.
+ * Every control clears the 44px target size from WCAG 2.2, and importance is
+ * always carried by a label and a shape as well as a colour.
  */
+import Link from 'next/link';
 import type { ReactNode } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
 
 import { formatTimeRange } from '@/domain/dates';
-import { EVENT_TYPE_LABELS, type Importance, type NormalizedSchoolEvent } from '@/domain/types';
-import { relativeDateLabel } from '@/relevance/grouping';
-import { MIN_TOUCH_TARGET, colors, importanceStyles, radius, spacing, typography } from './theme';
 
-// ---------------------------------------------------------------------------
+import { EVENT_TYPE_LABELS, type Importance, type NormalizedSchoolEvent } from '@/domain/types';
+import { dateRangeLabel, relativeDateLabel } from '@/relevance/grouping';
+import { importanceStyles } from './importance';
 
 export function ScreenTitle({ children }: { children: ReactNode }) {
   return (
-    <Text accessibilityRole="header" style={styles.screenTitle}>
+    <h1 className="text-3xl font-bold tracking-tight text-ink">{children}</h1>
+  );
+}
+
+export function SectionHeader({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="mt-6 mb-2 text-xs font-bold uppercase tracking-widest text-ink-faint">
       {children}
-    </Text>
+    </h2>
   );
 }
 
-export function SectionHeader({ title, count }: { title: string; count?: number }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text accessibilityRole="header" style={styles.sectionTitle}>
-        {title.toUpperCase()}
-      </Text>
-      {count !== undefined && count > 0 ? (
-        <Text style={styles.sectionCount}>{count}</Text>
-      ) : null}
-      <View style={styles.sectionRule} />
-    </View>
-  );
-}
-
-export function Badge({
-  label,
-  tone = 'neutral',
-}: {
-  label: string;
-  tone?: 'neutral' | 'accent' | 'changed';
-}) {
-  const toneStyle =
-    tone === 'accent'
-      ? { backgroundColor: colors.accentSurface, color: colors.accent }
-      : tone === 'changed'
-        ? { backgroundColor: colors.changedSurface, color: colors.changed }
-        : { backgroundColor: colors.surfaceSunken, color: colors.inkMuted };
-
-  return (
-    <View style={[styles.badge, { backgroundColor: toneStyle.backgroundColor }]}>
-      <Text style={[styles.badgeText, { color: toneStyle.color }]}>{label}</Text>
-    </View>
-  );
-}
-
-/**
- * Importance is shown with a symbol *and* a word, never colour alone.
- */
 export function ImportancePill({ importance }: { importance: Importance }) {
   const style = importanceStyles[importance];
   if (importance === 'normal' || importance === 'low') return null;
-
   return (
-    <View style={[styles.importancePill, { backgroundColor: style.surface }]}>
-      <Text style={[styles.importanceIcon, { color: style.color }]}>{style.icon}</Text>
-      <Text style={[styles.importanceLabel, { color: style.color }]}>{style.label}</Text>
-    </View>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${style.pill}`}
+    >
+      <span aria-hidden="true">{style.icon}</span>
+      {style.label}
+    </span>
   );
 }
 
-export function Card({
-  children,
-  style,
-}: {
-  children: ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  return <View style={[styles.card, style]}>{children}</View>;
+export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'changed' }) {
+  const tones = {
+    neutral: 'bg-sunken text-ink-muted',
+    changed: 'bg-changed-surface text-changed',
+  };
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+export function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface p-6 text-center">
+      <p className="font-semibold text-ink">{title}</p>
+      <p className="mt-1 text-sm text-ink-muted">{body}</p>
+    </div>
+  );
 }
 
 export function Button({
-  label,
-  onPress,
+  children,
+  onClick,
   variant = 'primary',
-  disabled = false,
-  accessibilityHint,
+  type = 'button',
+  disabled,
 }: {
-  label: string;
-  onPress: () => void;
+  children: ReactNode;
+  onClick?: () => void;
   variant?: 'primary' | 'secondary' | 'danger';
+  type?: 'button' | 'submit';
   disabled?: boolean;
-  accessibilityHint?: string;
 }) {
-  const variantStyle =
-    variant === 'primary'
-      ? { backgroundColor: disabled ? colors.borderStrong : colors.accent, color: colors.onAccent }
-      : variant === 'danger'
-        ? { backgroundColor: colors.criticalSurface, color: colors.critical }
-        : { backgroundColor: colors.surfaceSunken, color: colors.ink };
-
+  const variants = {
+    primary: 'bg-accent text-on-accent hover:opacity-90',
+    secondary: 'bg-surface text-ink border border-line-strong hover:bg-sunken',
+    danger: 'bg-surface text-critical border border-critical hover:bg-critical-surface',
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled }}
+    <button
+      type={type}
+      onClick={onClick}
       disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        { backgroundColor: variantStyle.backgroundColor, opacity: pressed ? 0.85 : 1 },
-      ]}
+      className={`rounded-md px-4 py-3 text-sm font-semibold transition disabled:opacity-50 ${variants[variant]}`}
     >
-      <Text style={[styles.buttonText, { color: variantStyle.color }]}>{label}</Text>
-    </Pressable>
+      {children}
+    </button>
   );
 }
-
-export function EmptyState({ title, body }: { title: string; body?: string }) {
-  return (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-export type EventCardProps = {
-  event: NormalizedSchoolEvent;
-  /** "Aoife · Junior Infants". Comes from the relevance engine. */
-  affectedLabel: string;
-  /** Today's date key, for "Today"/"Tomorrow" wording. */
-  today: string;
-  /** Set when this event changed since the parent last looked. */
-  changed?: boolean;
-  use24HourTime?: boolean;
-  onPress?: () => void;
-};
 
 /**
- * One event, showing only what a parent needs to decide what to do. The full
- * source wording is deliberately not rendered here -- it lives on the detail
- * screen, where it is labelled as the school's own words.
+ * One event in a list.
+ *
+ * The accessible name spells out date, type, importance and affected classes,
+ * because the visual grouping that makes those obvious on screen is not
+ * available to a screen reader reading one card at a time.
  */
 export function EventCard({
   event,
-  affectedLabel,
   today,
-  changed = false,
-  use24HourTime = true,
-  onPress,
-}: EventCardProps) {
+  use24HourTime,
+  affected,
+}: {
+  event: NormalizedSchoolEvent;
+  today: string;
+  use24HourTime: boolean;
+  /** e.g. "Aoife" or "Junior Infants" — who in this house it touches. */
+  affected?: string;
+}) {
   const style = importanceStyles[event.importance];
-  const timeLabel = formatTimeRange(event.startTime, event.endTime, use24HourTime);
-  const dateLabel = relativeDateLabel(event.date, today);
+  const when = relativeDateLabel(event.date, today);
+  const time = formatTimeRange(event.startTime, event.endTime, use24HourTime);
 
-  // One flat, ordered sentence so a screen reader announces the card usefully
-  // rather than reading a pile of disconnected fragments.
-  const accessibilityLabel = [
-    changed ? 'Updated.' : null,
-    event.importance === 'critical' || event.importance === 'high' ? `${style.label}.` : null,
-    dateLabel,
+  const label = [
+    style.label,
     event.title,
-    affectedLabel,
-    timeLabel,
-    event.summary,
+    when,
+    time,
+    affected ? `for ${affected}` : '',
+    event.parentActionRequired ? 'Action needed' : '',
   ]
     .filter(Boolean)
     .join('. ');
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityHint="Opens the full event details"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        styles.eventCard,
-        style.borderWidth > 0 && {
-          borderLeftWidth: style.borderWidth,
-          borderLeftColor: style.color,
-        },
-        pressed && { backgroundColor: colors.surfaceSunken },
-      ]}
+    <Link
+      href={`/event/${encodeURIComponent(event.id)}`}
+      aria-label={label}
+      className={`block rounded-lg border border-line p-4 transition hover:border-line-strong ${style.surface}`}
     >
-      <View style={styles.eventCardHeader}>
-        <Text style={styles.eventDate}>{dateLabel}</Text>
-        {changed ? <Badge label="Updated" tone="changed" /> : null}
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-bold text-ink">{event.title}</p>
         <ImportancePill importance={event.importance} />
-      </View>
+      </div>
 
-      <Text style={styles.eventTitle}>{event.title}</Text>
-
-      <View style={styles.eventMeta}>
-        <Badge label={affectedLabel} tone="accent" />
-        {timeLabel ? <Badge label={timeLabel} /> : null}
-      </View>
+      <p className="mt-1 text-sm font-semibold text-ink-muted">
+        {dateRangeLabel(event)}
+        {time ? ` · ${time}` : ''}
+      </p>
 
       {event.summary ? (
-        <Text style={styles.eventSummary} numberOfLines={3}>
-          {event.summary}
-        </Text>
+        <p className="mt-2 text-sm text-ink-muted">{event.summary}</p>
       ) : null}
 
-      {event.parentActionRequired && event.parentAction ? (
-        <Text style={styles.eventAction}>{event.parentAction}</Text>
-      ) : null}
-
-      {event.needsReview ? (
-        <Text style={styles.reviewNote}>
-          Interpreted with low confidence — check the school calendar.
-        </Text>
-      ) : null}
-    </Pressable>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Badge>{EVENT_TYPE_LABELS[event.eventType]}</Badge>
+        {affected ? <Badge>{affected}</Badge> : null}
+        {event.needsReview ? <Badge tone="changed">Unconfirmed</Badge> : null}
+      </div>
+    </Link>
   );
 }
-
-export function EventTypeLabel({ event }: { event: NormalizedSchoolEvent }) {
-  return <Badge label={EVENT_TYPE_LABELS[event.eventType]} />;
-}
-
-// ---------------------------------------------------------------------------
-
-const styles = StyleSheet.create({
-  screenTitle: {
-    ...typography.screenTitle,
-    color: colors.ink,
-    marginBottom: spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    ...typography.sectionTitle,
-    color: colors.inkFaint,
-  },
-  sectionCount: {
-    ...typography.badge,
-    color: colors.inkFaint,
-  },
-  sectionRule: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  badge: {
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  badgeText: typography.badge,
-  importancePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  importanceIcon: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  importanceLabel: typography.badge,
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-  },
-  eventCard: {
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-    minHeight: MIN_TOUCH_TARGET,
-  },
-  eventCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  eventDate: {
-    ...typography.date,
-    color: colors.inkMuted,
-    flex: 1,
-  },
-  eventTitle: {
-    ...typography.cardTitle,
-    color: colors.ink,
-  },
-  eventMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  eventSummary: {
-    ...typography.body,
-    color: colors.inkMuted,
-    lineHeight: 21,
-  },
-  eventAction: {
-    ...typography.bodyStrong,
-    color: colors.ink,
-  },
-  reviewNote: {
-    ...typography.caption,
-    color: colors.inkFaint,
-    fontStyle: 'italic',
-  },
-  button: {
-    minHeight: MIN_TOUCH_TARGET,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    ...typography.bodyStrong,
-    fontSize: 16,
-  },
-  emptyState: {
-    paddingVertical: spacing.lg,
-    gap: spacing.xs,
-  },
-  emptyTitle: {
-    ...typography.body,
-    color: colors.inkMuted,
-  },
-  emptyBody: {
-    ...typography.caption,
-    color: colors.inkFaint,
-  },
-});
-
-export { styles as sharedStyles };

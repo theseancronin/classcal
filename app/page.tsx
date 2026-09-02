@@ -20,7 +20,8 @@ import { StaleBanner } from '@/ui/banners';
 
 export default function HomePage() {
   const router = useRouter();
-  const { ready, family, display, events, status, error, stale, today, refresh, loading } = useApp();
+  const { ready, family, display, events, status, error, stale, today, refresh, loading, loadedOnce } =
+    useApp();
 
   useEffect(() => {
     if (ready && !isSetupComplete(family)) router.replace('/setup');
@@ -35,12 +36,14 @@ export default function HomePage() {
       <header className="flex items-start justify-between gap-4">
         <div>
           <ScreenTitle>For you</ScreenTitle>
-          <StaleBanner
-            lastSuccessAt={status?.lastSuccessAt}
-            stale={stale}
-            error={error}
-            onRetry={() => void refresh()}
-          />
+          {loadedOnce ? (
+            <StaleBanner
+              lastSuccessAt={status?.lastSuccessAt}
+              stale={stale}
+              error={error}
+              onRetry={() => void refresh()}
+            />
+          ) : null}
         </div>
         <nav className="flex shrink-0 gap-2 text-sm font-semibold">
           <Link href="/calendar" className="rounded-md px-3 py-2 text-accent hover:bg-accent-surface">

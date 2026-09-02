@@ -1,12 +1,15 @@
 /**
  * Family configuration.
  *
- * Child names and class selections never leave the device. They are stored in
- * plain device storage, are never sent to the interpreter, and are removed
- * entirely by "Clear family data" in Settings.
+ * Child names and class selections never leave the browser. There are no
+ * accounts: this is the only place a household is described, it is never sent
+ * to the server or the interpreter, and "Clear family data" in Settings removes
+ * it entirely.
+ *
+ * Reads are synchronous because localStorage is, which avoids a loading flash
+ * on first paint. They are guarded for server rendering, where there is no
+ * window and the defaults are the correct answer.
  */
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import { familySelectionSchema, notificationPreferencesSchema } from '@/domain/schemas';
 import type { FamilySelection, NotificationPreferences, SelectableClass } from '@/domain/types';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/notifications/schedule';
@@ -30,16 +33,14 @@ export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
 
 /**
  * Storage is untrusted input too: it may have been written by an older version
- * of the app, so everything read back is validated and falls back to a default
- * rather than crashing the first screen a parent sees.
+ * of the app, and in a private window it can throw on access. Everything read
+ * back is validated and falls back to a default rather than breaking the first
+ * screen a parent sees.
  */
-async function readValidated<T>(
-  key: string,
-  parse: (value: unknown) => T | null,
-  fallback: T,
-): Promise<T> {
+function readValidated<T>(key: string, parse: (value: unknown) => T | null, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const stored = await AsyncStorage.getItem(key);
+    const stored = window.localStorage.getItem(key);
     if (!stored) return fallback;
     return parse(JSON.parse(stored)) ?? fallback;
   } catch {
@@ -47,7 +48,17 @@ async function readValidated<T>(
   }
 }
 
-export async function loadFamily(): Promise<FamilySelection> {
+function write(key: string, value: unknown): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Private browsing or a full quota. The in-memory state stays correct for
+    // this session; there is nothing useful to tell the parent here.
+  }
+}
+
+export function loadFamily(): FamilySelection {
   return readValidated(
     FAMILY_KEY,
     (value) => {
@@ -58,12 +69,11 @@ export async function loadFamily(): Promise<FamilySelection> {
   );
 }
 
-export async function saveFamily(family: FamilySelection): Promise<void> {
-  const validated = familySelectionSchema.parse(family);
-  await AsyncStorage.setItem(FAMILY_KEY, JSON.stringify(validated));
+export function saveFamily(family: FamilySelection): void {
+  write(FAMILY_KEY, familySelectionSchema.parse(family));
 }
 
-export async function loadPreferences(): Promise<NotificationPreferences> {
+export function loadPreferences(): NotificationPreferences {
   return readValidated(
     PREFERENCES_KEY,
     (value) => {
@@ -74,11 +84,11 @@ export async function loadPreferences(): Promise<NotificationPreferences> {
   );
 }
 
-export async function savePreferences(preferences: NotificationPreferences): Promise<void> {
-  await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+export function savePreferences(preferences: NotificationPreferences): void {
+  write(PREFERENCES_KEY, preferences);
 }
 
-export async function loadDisplayPreferences(): Promise<DisplayPreferences> {
+export function loadDisplayPreferences(): DisplayPreferences {
   return readValidated(
     DISPLAY_KEY,
     (value) =>
@@ -89,13 +99,20 @@ export async function loadDisplayPreferences(): Promise<DisplayPreferences> {
   );
 }
 
-export async function saveDisplayPreferences(preferences: DisplayPreferences): Promise<void> {
-  await AsyncStorage.setItem(DISPLAY_KEY, JSON.stringify(preferences));
+export function saveDisplayPreferences(preferences: DisplayPreferences): void {
+  write(DISPLAY_KEY, preferences);
 }
 
-/** Remove every trace of the family from the device. */
-export async function clearFamilyData(): Promise<void> {
-  await AsyncStorage.multiRemove([FAMILY_KEY, PREFERENCES_KEY, DISPLAY_KEY]);
+/** Remove every trace of the family from the browser. */
+export function clearFamilyData(): void {
+  if (typeof window === 'undefined') return;
+  for (const key of [FAMILY_KEY, PREFERENCES_KEY, DISPLAY_KEY]) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Nothing to do; the caller resets in-memory state regardless.
+    }
+  }
 }
 
 /** Setup is complete once at least one class has been chosen. */
@@ -105,7 +122,7 @@ export function isSetupComplete(family: FamilySelection): boolean {
 
 let childCounter = 0;
 
-/** Ids only need to be unique within one device. */
+/** Ids only need to be unique within one browser. */
 export function newChildId(schoolClass: SelectableClass): string {
   childCounter += 1;
   return `${schoolClass}-${Date.now().toString(36)}-${childCounter}`;

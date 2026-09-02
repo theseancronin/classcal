@@ -1,15 +1,26 @@
 /**
- * The on-device schema and its migrations.
+ * The Postgres schema and its migrations.
  *
- * Migrations are plain, forward-only SQL keyed by `user_version`. There is no
- * server, so an upgrade must always be able to run against whatever version is
- * already on a parent's phone.
+ * Forward-only SQL, tracked in `schema_migrations` rather than SQLite's
+ * `PRAGMA user_version`. Applied on deploy and by the test harness, so the
+ * suite exercises the production schema rather than a mock of it.
+ *
+ * Two deliberate carry-overs from the SQLite original:
+ *
+ *  - Booleans stay as `integer` 0/1. Postgres has a real boolean type, but the
+ *    repository's `toSqlBoolean`/`fromSqlBoolean` helpers and every query that
+ *    uses them are already tested; changing the storage type would churn them
+ *    for no behavioural gain.
+ *  - Timestamps stay as ISO-8601 `text`. Every comparison in the app is a
+ *    lexicographic string compare on a UTC ISO string, which is exactly what
+ *    the domain layer produces and what the tests assert against.
+ *
+ * `end` is quoted throughout: it is a reserved keyword in Postgres, though not
+ * in SQLite.
  */
 import type { SqlDatabase } from './port';
 
-/**
- * Each entry is one schema version. Append; never edit a released entry.
- */
+/** Each entry is one schema version. Append; never edit a released entry. */
 const MIGRATIONS: readonly string[] = [
   // --- v1: initial schema -------------------------------------------------
   `
@@ -26,7 +37,7 @@ const MIGRATIONS: readonly string[] = [
   -- Raw source events are immutable per version. A changed payload inserts a
   -- new row and clears is_current on the old one, so history is preserved.
   CREATE TABLE raw_events (
-    version_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_id      INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     source_id       TEXT NOT NULL,
     source_calendar TEXT NOT NULL,
     source_uid      TEXT,
@@ -34,7 +45,7 @@ const MIGRATIONS: readonly string[] = [
     description     TEXT,
     location        TEXT,
     start           TEXT NOT NULL,
-    end             TEXT,
+    "end"           TEXT,
     all_day         INTEGER NOT NULL,
     payload_hash    TEXT NOT NULL,
     fetched_at      TEXT NOT NULL,
@@ -105,7 +116,7 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX event_changes_unacknowledged ON event_changes (acknowledged, detected_at);
 
   CREATE TABLE processing_runs (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     started_at     TEXT NOT NULL,
     finished_at    TEXT,
     interpreter_id TEXT NOT NULL,
@@ -128,39 +139,99 @@ const MIGRATIONS: readonly string[] = [
 
   CREATE INDEX scheduled_notifications_event ON scheduled_notifications (event_id);
   `,
+
+  // --- v2: web push subscriptions -----------------------------------------
+  `
+  -- One row per browser that has enabled reminders. There are no accounts, so
+  -- the endpoint is the identity: it is opaque, issued by the browser's push
+  -- service, and revocable by the parent at any time by turning reminders off.
+  CREATE TABLE push_subscriptions (
+    endpoint      TEXT PRIMARY KEY,
+    p256dh        TEXT NOT NULL,
+    auth          TEXT NOT NULL,
+    classes       TEXT NOT NULL,
+    preferences   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    -- Set when the push service reports the subscription is gone, so a dead
+    -- endpoint is retried no further.
+    failed_at     TEXT
+  );
+
+  CREATE INDEX push_subscriptions_active ON push_subscriptions (failed_at);
+  `,
+
+  // --- v3: delivered reminders --------------------------------------------
+  `
+  -- One row per reminder actually delivered to one browser. The pair is the
+  -- idempotency guarantee: a reminder is sent at most once per subscription,
+  -- however often the send job runs or overlaps with itself.
+  CREATE TABLE sent_push (
+    endpoint        TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    sent_at         TEXT NOT NULL,
+    PRIMARY KEY (endpoint, idempotency_key)
+  );
+
+  CREATE INDEX sent_push_sent_at ON sent_push (sent_at);
+  `,
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
+const MIGRATIONS_TABLE = `
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT NOT NULL
+  )`;
+
 /**
- * Bring a database up to the latest schema version. Safe to call on every
- * launch; already-applied migrations are skipped.
+ * Every table, ordered so that dropping them in sequence never trips a
+ * dependency. Exported so the test harness truncates exactly what the schema
+ * creates, rather than keeping a second list that silently drifts.
+ */
+export const TABLES = [
+  'sent_push',
+  'push_subscriptions',
+  'scheduled_notifications',
+  'processing_runs',
+  'event_changes',
+  'event_classes',
+  'normalized_events',
+  'raw_events',
+  'calendar_source',
+  'schema_migrations',
+];
+
+/**
+ * Bring a database up to the latest schema version. Safe to call repeatedly;
+ * already-applied migrations are skipped.
  */
 export async function migrate(db: SqlDatabase): Promise<number> {
-  const [row] = await db.all<{ user_version: number }>('PRAGMA user_version');
-  const current = row?.user_version ?? 0;
+  await db.execute(MIGRATIONS_TABLE);
+
+  const [row] = await db.all<{ version: number | null }>(
+    'SELECT MAX(version) AS version FROM schema_migrations',
+  );
+  const current = Number(row?.version ?? 0);
 
   for (let version = current; version < MIGRATIONS.length; version += 1) {
-    const sql = MIGRATIONS[version]!;
-    await db.execute(sql);
-    // PRAGMA does not accept bound parameters; the value is a loop counter.
-    await db.execute(`PRAGMA user_version = ${version + 1}`);
+    await db.transaction(async () => {
+      await db.execute(MIGRATIONS[version]!);
+      await db.run('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)', [
+        version + 1,
+        new Date().toISOString(),
+      ]);
+    });
   }
 
   return MIGRATIONS.length;
 }
 
-/** Drop everything. Used by "clear all data" in Settings and by tests. */
+/** Drop everything and rebuild. Used by tests and by the admin reset. */
 export async function resetDatabase(db: SqlDatabase): Promise<void> {
-  await db.execute(`
-    DROP TABLE IF EXISTS scheduled_notifications;
-    DROP TABLE IF EXISTS processing_runs;
-    DROP TABLE IF EXISTS event_changes;
-    DROP TABLE IF EXISTS event_classes;
-    DROP TABLE IF EXISTS normalized_events;
-    DROP TABLE IF EXISTS raw_events;
-    DROP TABLE IF EXISTS calendar_source;
-    PRAGMA user_version = 0;
-  `);
+  for (const table of TABLES) {
+    await db.execute(`DROP TABLE IF EXISTS ${table} CASCADE`);
+  }
   await migrate(db);
 }

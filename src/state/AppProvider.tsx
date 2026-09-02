@@ -1,10 +1,12 @@
+'use client';
+
 /**
- * The single application context.
+ * The single piece of app-wide state.
  *
- * Owns the database connection, the family configuration and the sync lifecycle
- * so that no screen has to know how any of it works. Screens read events through
- * `useEvents`, which is a pure database read -- interpretation never runs on the
- * render path.
+ * Holds the household (from localStorage, never sent anywhere), the events for
+ * that household (from the API), and enough sync metadata to be honest about
+ * staleness. Events are fetched for the selected classes only, so the payload a
+ * parent downloads is already the payload they can see.
  */
 import {
   createContext,
@@ -12,25 +14,11 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { AppState } from 'react-native';
 
-import { STALE_AFTER_HOURS, SYNC_INTERVAL_MINUTES } from '@/config/school';
-import { openDatabase } from '@/db/expoSqlite';
-import type { SqlDatabase } from '@/db/port';
-import {
-  acknowledgeChanges,
-  getRecentChanges,
-  getSyncStatus,
-  queryEvents,
-  setFeedUrl,
-  type EventQuery,
-} from '@/db/repository';
 import type {
-  EventChange,
   FamilySelection,
   NormalizedSchoolEvent,
   NotificationPreferences,
@@ -39,8 +27,6 @@ import type {
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   EMPTY_FAMILY,
-  clearFamilyData,
-  isSetupComplete,
   loadDisplayPreferences,
   loadFamily,
   loadPreferences,
@@ -49,282 +35,156 @@ import {
   savePreferences,
   type DisplayPreferences,
 } from '@/family/store';
-import { readInterpreterSettings } from '@/interpreter/config';
-import { createInterpreter } from '@/interpreter/factory';
-import { syncCalendar, type SyncResult } from '@/pipeline/sync';
+import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/notifications/schedule';
 import { selectedClassesOf } from '@/relevance/relevance';
-import { syncNotifications } from '@/notifications/delivery';
 import { toDateKey } from '@/relevance/grouping';
 
-export type AppContextValue = {
+/** Beyond this, the calendar is presented as possibly out of date (spec 26). */
+const STALE_AFTER_HOURS = 24;
+
+type AppState = {
+  /** False until localStorage has been read, so nothing renders from defaults. */
   ready: boolean;
-  db: SqlDatabase | null;
-
   family: FamilySelection;
-  setupComplete: boolean;
-  updateFamily: (family: FamilySelection) => Promise<void>;
-
   preferences: NotificationPreferences;
-  updatePreferences: (preferences: NotificationPreferences) => Promise<void>;
-
   display: DisplayPreferences;
-  updateDisplay: (display: DisplayPreferences) => Promise<void>;
-
-  syncStatus: SyncStatus;
-  syncing: boolean;
-  /** True when the last sync failed or the data is older than the stale window. */
+  events: NormalizedSchoolEvent[];
+  status: SyncStatus | undefined;
+  loading: boolean;
+  /** Set when the last fetch failed; the cached events are still shown. */
+  error: string | undefined;
+  /** False until the first fetch settles, so the UI never guesses before then. */
+  loadedOnce: boolean;
   stale: boolean;
-  lastSyncError: string | null;
-  refresh: (options?: { force?: boolean }) => Promise<SyncResult | null>;
-  updateFeedUrl: (url: string) => Promise<void>;
-
-  changes: EventChange[];
-  dismissChanges: () => Promise<void>;
-
-  clearEverything: () => Promise<void>;
-
-  /** `YYYY-MM-DD` today, recomputed when the app returns to the foreground. */
   today: string;
-
-  /** Bumped after every write, so screens know to re-read. */
-  revision: number;
+  setFamily: (family: FamilySelection) => void;
+  setPreferences: (preferences: NotificationPreferences) => void;
+  setDisplay: (display: DisplayPreferences) => void;
+  refresh: () => Promise<void>;
 };
 
-const AppContext = createContext<AppContextValue | null>(null);
+const AppContext = createContext<AppState | undefined>(undefined);
 
-export function useApp(): AppContextValue {
-  const value = useContext(AppContext);
-  if (!value) throw new Error('useApp must be used inside <AppProvider>');
-  return value;
+export function useApp(): AppState {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useApp must be used inside AppProvider');
+  return context;
 }
 
-export type AppProviderProps = {
-  children: ReactNode;
-  /**
-   * Whether to sync from the network on launch and on foreground. Tests seed the
-   * database directly and turn this off so they never touch the school's server.
-   */
-  autoSync?: boolean;
-};
-
-export function AppProvider({ children, autoSync = true }: AppProviderProps) {
-  const [db, setDb] = useState<SqlDatabase | null>(null);
+export function AppProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [ready, setReady] = useState(false);
-  const [family, setFamily] = useState<FamilySelection>(EMPTY_FAMILY);
-  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
-  const [display, setDisplay] = useState<DisplayPreferences>(DEFAULT_DISPLAY_PREFERENCES);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ eventsIngested: 0, eventsChanged: 0 });
-  const [syncing, setSyncing] = useState(false);
-  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
-  const [changes, setChanges] = useState<EventChange[]>([]);
-  const [revision, setRevision] = useState(0);
+  const [family, setFamilyState] = useState<FamilySelection>(EMPTY_FAMILY);
+  const [preferences, setPreferencesState] = useState(DEFAULT_NOTIFICATION_PREFERENCES);
+  const [display, setDisplayState] = useState(DEFAULT_DISPLAY_PREFERENCES);
+  const [events, setEvents] = useState<NormalizedSchoolEvent[]>([]);
+  const [status, setStatus] = useState<SyncStatus>();
+  const [loading, setLoading] = useState(false);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [error, setError] = useState<string>();
   const [today, setToday] = useState(() => toDateKey(new Date()));
 
-  const interpreter = useMemo(() => createInterpreter(readInterpreterSettings()), []);
-  const syncInFlight = useRef<Promise<SyncResult | null> | null>(null);
-
-  // --- Boot ---------------------------------------------------------------
+  // localStorage is only available in the browser, so the first read happens
+  // after mount rather than during render.
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      const [database, loadedFamily, loadedPreferences, loadedDisplay] = await Promise.all([
-        openDatabase(),
-        loadFamily(),
-        loadPreferences(),
-        loadDisplayPreferences(),
-      ]);
-      if (cancelled) return;
-
-      setDb(database);
-      setFamily(loadedFamily);
-      setPreferences(loadedPreferences);
-      setDisplay(loadedDisplay);
-      setSyncStatus(await getSyncStatus(database));
-      setChanges(await getRecentChanges(database, { onlyUnacknowledged: true }));
-      setReady(true);
-    })().catch(() => {
-      // A failed boot must still render the app; the UI shows the sync error.
-      if (!cancelled) setReady(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    setFamilyState(loadFamily());
+    setPreferencesState(loadPreferences());
+    setDisplayState(loadDisplayPreferences());
+    setReady(true);
   }, []);
 
-  // --- Sync ---------------------------------------------------------------
-  const refresh = useCallback(
-    async (options: { force?: boolean } = {}) => {
-      if (!db) return null;
-      if (syncInFlight.current) return syncInFlight.current;
+  const classes = useMemo(() => selectedClassesOf(family), [family]);
+  const classKey = classes.join(',');
 
-      if (!options.force && syncStatus.lastAttemptAt) {
-        const elapsedMinutes = (Date.now() - Date.parse(syncStatus.lastAttemptAt)) / 60_000;
-        if (elapsedMinutes < SYNC_INTERVAL_MINUTES) return null;
-      }
+  const refresh = useCallback(async () => {
+    if (classes.length === 0) {
+      setEvents([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ classes: classes.join(',') });
+      const response = await fetch(`/api/events?${params.toString()}`);
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      const payload = (await response.json()) as {
+        events: NormalizedSchoolEvent[];
+        status: SyncStatus;
+      };
+      setEvents(payload.events);
+      setStatus(payload.status);
+      setError(undefined);
+    } catch (cause) {
+      // Keep whatever is already on screen. Showing nothing would be a worse
+      // lie than showing yesterday's calendar with a staleness warning.
+      setError(cause instanceof Error ? cause.message : 'Could not refresh');
+    } finally {
+      setLoading(false);
+      setLoadedOnce(true);
+    }
+  }, [classes.length, classKey]);
 
-      setSyncing(true);
-      const work = (async () => {
-        try {
-          const result = await syncCalendar({ db, interpreter });
-          setLastSyncError(result.ok ? null : (result.error ?? 'Sync failed.'));
-          setSyncStatus(await getSyncStatus(db));
-          setChanges(await getRecentChanges(db, { onlyUnacknowledged: true }));
-          setRevision((n) => n + 1);
-          return result;
-        } finally {
-          setSyncing(false);
-          syncInFlight.current = null;
-        }
-      })();
-
-      syncInFlight.current = work;
-      return work;
-    },
-    [db, interpreter, syncStatus.lastAttemptAt],
-  );
-
-  // Refresh on launch and whenever the app returns to the foreground, rate
-  // limited to the configured interval.
   useEffect(() => {
-    if (!ready || !db || !autoSync) return;
-    void refresh();
+    if (ready) void refresh();
+  }, [ready, refresh]);
 
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') return;
+  // Refresh when the tab is brought back to the foreground: a parent checking
+  // at the school gate should not be looking at a morning-old page.
+  useEffect(() => {
+    const onVisible = (): void => {
+      if (document.visibilityState !== 'visible') return;
       setToday(toDateKey(new Date()));
       void refresh();
-    });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refresh]);
 
-    return () => subscription.remove();
-  }, [ready, db, autoSync, refresh]);
-
-  // --- Notifications ------------------------------------------------------
-  // Reminders are reconciled after every change to events or preferences, so a
-  // moved event never leaves a stale reminder behind.
-  useEffect(() => {
-    if (!db || !preferences || !isSetupComplete(family)) return;
-    void syncNotifications({
-      db,
-      preferences,
-      selectedClasses: selectedClassesOf(family),
-    }).catch(() => {
-      // Notification permission may be denied; the rest of the app still works.
-    });
-  }, [db, preferences, family, revision]);
-
-  // --- Mutations ----------------------------------------------------------
-  const updateFamily = useCallback(async (next: FamilySelection) => {
-    await saveFamily(next);
-    setFamily(next);
-    setRevision((n) => n + 1);
+  const setFamily = useCallback((next: FamilySelection) => {
+    setFamilyState(next);
+    saveFamily(next);
   }, []);
 
-  const updatePreferences = useCallback(async (next: NotificationPreferences) => {
-    await savePreferences(next);
-    setPreferences(next);
+  const setPreferences = useCallback((next: NotificationPreferences) => {
+    setPreferencesState(next);
+    savePreferences(next);
   }, []);
 
-  const updateDisplay = useCallback(async (next: DisplayPreferences) => {
-    await saveDisplayPreferences(next);
-    setDisplay(next);
-  }, []);
-
-  const updateFeedUrl = useCallback(
-    async (url: string) => {
-      if (!db) return;
-      await setFeedUrl(db, url);
-      await refresh({ force: true });
-    },
-    [db, refresh],
-  );
-
-  const dismissChanges = useCallback(async () => {
-    if (!db) return;
-    await acknowledgeChanges(db, changes.map((change) => change.id));
-    setChanges([]);
-  }, [db, changes]);
-
-  const clearEverything = useCallback(async () => {
-    await clearFamilyData();
-    setFamily(EMPTY_FAMILY);
-    setDisplay(DEFAULT_DISPLAY_PREFERENCES);
-    setRevision((n) => n + 1);
+  const setDisplay = useCallback((next: DisplayPreferences) => {
+    setDisplayState(next);
+    saveDisplayPreferences(next);
   }, []);
 
   const stale = useMemo(() => {
-    if (!syncStatus.lastSuccessAt) return true;
-    const ageHours = (Date.now() - Date.parse(syncStatus.lastSuccessAt)) / 3_600_000;
-    return ageHours > STALE_AFTER_HOURS || lastSyncError !== null;
-  }, [syncStatus.lastSuccessAt, lastSyncError]);
+    // Before the first fetch settles the honest answer is "not yet known", not
+    // "out of date" -- claiming staleness here would be its own small lie.
+    if (!loadedOnce) return false;
+    if (!status?.lastSuccessAt) return true;
+    const age = Date.now() - new Date(status.lastSuccessAt).getTime();
+    return age > STALE_AFTER_HOURS * 60 * 60 * 1000;
+  }, [loadedOnce, status]);
 
-  const value: AppContextValue = {
-    ready,
-    db,
-    family,
-    setupComplete: isSetupComplete(family),
-    updateFamily,
-    preferences: preferences ?? {
-      schoolClosure: true,
-      earlyFinish: true,
-      parentMeetings: true,
-      classImportant: true,
-      generalActivities: false,
-      reminderTypes: { seven_days_before: true, one_day_before: true, morning_of: true },
-    },
-    updatePreferences,
-    display,
-    updateDisplay,
-    syncStatus,
-    syncing,
-    stale,
-    lastSyncError,
-    refresh,
-    updateFeedUrl,
-    changes,
-    dismissChanges,
-    clearEverything,
-    today,
-    revision,
-  };
+  const value = useMemo<AppState>(
+    () => ({
+      ready,
+      family,
+      preferences,
+      display,
+      events,
+      status,
+      loading,
+      error,
+      loadedOnce,
+      stale,
+      today,
+      setFamily,
+      setPreferences,
+      setDisplay,
+      refresh,
+    }),
+    [
+      ready, family, preferences, display, events, status, loading, error,
+      loadedOnce, stale, today, setFamily, setPreferences, setDisplay, refresh,
+    ],
+  );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-}
-
-/**
- * Read events from the database. Re-runs whenever the query or the data changes.
- */
-export function useEvents(query: EventQuery): {
-  events: NormalizedSchoolEvent[];
-  loading: boolean;
-} {
-  const { db, revision } = useApp();
-  const [events, setEvents] = useState<NormalizedSchoolEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const key = JSON.stringify(query);
-
-  useEffect(() => {
-    if (!db) return;
-    let cancelled = false;
-    setLoading(true);
-
-    queryEvents(db, JSON.parse(key) as EventQuery)
-      .then((result) => {
-        if (!cancelled) setEvents(result);
-      })
-      .catch(() => {
-        if (!cancelled) setEvents([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [db, key, revision]);
-
-  return { events, loading };
 }

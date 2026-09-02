@@ -139,6 +139,27 @@ const MIGRATIONS: readonly string[] = [
 
   CREATE INDEX scheduled_notifications_event ON scheduled_notifications (event_id);
   `,
+
+  // --- v2: web push subscriptions -----------------------------------------
+  `
+  -- One row per browser that has enabled reminders. There are no accounts, so
+  -- the endpoint is the identity: it is opaque, issued by the browser's push
+  -- service, and revocable by the parent at any time by turning reminders off.
+  CREATE TABLE push_subscriptions (
+    endpoint      TEXT PRIMARY KEY,
+    p256dh        TEXT NOT NULL,
+    auth          TEXT NOT NULL,
+    classes       TEXT NOT NULL,
+    preferences   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    -- Set when the push service reports the subscription is gone, so a dead
+    -- endpoint is retried no further.
+    failed_at     TEXT
+  );
+
+  CREATE INDEX push_subscriptions_active ON push_subscriptions (failed_at);
+  `,
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
@@ -150,6 +171,7 @@ const MIGRATIONS_TABLE = `
   )`;
 
 const TABLES = [
+  'push_subscriptions',
   'scheduled_notifications',
   'processing_runs',
   'event_changes',

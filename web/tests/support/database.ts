@@ -6,17 +6,10 @@
  * truncated database instead — same isolation, a fraction of the cost.
  */
 import { createPgliteDatabase, type PgliteDatabase } from '@/db/pglite';
-import { migrate } from '@/db/schema';
+import { TABLES, migrate } from '@/db/schema';
 
-const TABLES = [
-  'scheduled_notifications',
-  'processing_runs',
-  'event_changes',
-  'event_classes',
-  'normalized_events',
-  'raw_events',
-  'calendar_source',
-];
+/** Everything except the migrations ledger, which must survive a truncate. */
+const DATA_TABLES = TABLES.filter((table) => table !== 'schema_migrations');
 
 /** A migrated database, ready for a test file to share. */
 export async function createTestDatabase(): Promise<PgliteDatabase> {
@@ -27,5 +20,5 @@ export async function createTestDatabase(): Promise<PgliteDatabase> {
 
 /** Empty every table, resetting identity sequences, without dropping schema. */
 export async function truncateAll(db: PgliteDatabase): Promise<void> {
-  await db.execute(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
+  await db.execute(`TRUNCATE ${DATA_TABLES.join(', ')} RESTART IDENTITY CASCADE`);
 }

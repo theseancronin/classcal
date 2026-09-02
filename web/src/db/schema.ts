@@ -160,6 +160,21 @@ const MIGRATIONS: readonly string[] = [
 
   CREATE INDEX push_subscriptions_active ON push_subscriptions (failed_at);
   `,
+
+  // --- v3: delivered reminders --------------------------------------------
+  `
+  -- One row per reminder actually delivered to one browser. The pair is the
+  -- idempotency guarantee: a reminder is sent at most once per subscription,
+  -- however often the send job runs or overlaps with itself.
+  CREATE TABLE sent_push (
+    endpoint        TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    sent_at         TEXT NOT NULL,
+    PRIMARY KEY (endpoint, idempotency_key)
+  );
+
+  CREATE INDEX sent_push_sent_at ON sent_push (sent_at);
+  `,
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
@@ -170,7 +185,13 @@ const MIGRATIONS_TABLE = `
     applied_at  TEXT NOT NULL
   )`;
 
-const TABLES = [
+/**
+ * Every table, ordered so that dropping them in sequence never trips a
+ * dependency. Exported so the test harness truncates exactly what the schema
+ * creates, rather than keeping a second list that silently drifts.
+ */
+export const TABLES = [
+  'sent_push',
   'push_subscriptions',
   'scheduled_notifications',
   'processing_runs',

@@ -1,11 +1,12 @@
 /**
- * Integration tests for the whole ingestion path, against a real SQLite
+ * Integration tests for the whole ingestion path, against a real Postgres
  * database running the production schema and SQL.
  */
 import { readFileSync } from 'node:fs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { createNodeSqlDatabase, type NodeSqlDatabase } from '@/db/nodeSqlite';
+import { createPgliteDatabase, type PgliteDatabase } from '@/db/pglite';
+import { createTestDatabase, truncateAll } from './support/database';
 import {
   getRawEventHistory,
   getEventsNeedingAttention,
@@ -22,17 +23,20 @@ import type { InterpretedCalendarEvent, RawCalendarEvent } from '@/domain/types'
 
 const FIXTURE = readFileSync(new URL('../fixtures/gsmnc-sample.ics', import.meta.url), 'utf8');
 
-let db: NodeSqlDatabase;
+let db: PgliteDatabase;
 const interpreter = new HeuristicCalendarEventInterpreter();
 const now = () => new Date('2026-09-02T09:00:00.000Z');
 
-beforeEach(async () => {
-  db = createNodeSqlDatabase();
-  await migrate(db);
+beforeAll(async () => {
+  db = await createTestDatabase();
 });
 
-afterEach(() => {
-  db.close();
+beforeEach(async () => {
+  await truncateAll(db);
+});
+
+afterAll(async () => {
+  await db.close();
 });
 
 function sync(source = FIXTURE, options: Partial<Parameters<typeof syncCalendar>[0]> = {}) {
@@ -41,9 +45,9 @@ function sync(source = FIXTURE, options: Partial<Parameters<typeof syncCalendar>
 
 describe('migrations', () => {
   it('applies from a clean database', async () => {
-    const fresh = createNodeSqlDatabase();
+    const fresh = await createPgliteDatabase();
     await expect(migrate(fresh)).resolves.toBeGreaterThan(0);
-    fresh.close();
+    await fresh.close();
   });
 
   it('is idempotent', async () => {

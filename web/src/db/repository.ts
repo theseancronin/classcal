@@ -115,7 +115,7 @@ export async function upsertRawEvent(
   await db.run(
     `INSERT INTO raw_events (
        source_id, source_calendar, source_uid, title, description, location,
-       start, end, all_day, payload_hash, fetched_at, source_url, is_current, processing_status
+       start, "end", all_day, payload_hash, fetched_at, source_url, is_current, processing_status
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending')`,
     [
       event.sourceId,

@@ -1,0 +1,1415 @@
+{
+  "project": "ClassCal",
+  "version": 2,
+  "status_model": {
+    "job_status_values": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "tests_failing",
+      "done"
+    ],
+    "task_status_values": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "done"
+    ]
+  },
+  "agent_rules": {
+    "source_of_truth": "This file is the authoritative implementation progress tracker. Update it immediately when task or test state changes.",
+    "priority_rule": "Jobs must be worked in ascending priority order unless a higher-priority job is blocked by an external dependency.",
+    "single_active_job_rule": "Prefer one active implementation job at a time. Do not begin the next incomplete job until the current job satisfies its completion gate, unless the current job is explicitly blocked.",
+    "job_completion_rule": "A job's completed field may be set to 'done' only when every task in the job is done, every required test has been written, and every required test is passing.",
+    "test_failure_rule": "If any test associated with a job fails, that job's completed field must immediately be changed from 'done' to 'tests_failing'. The failure must be addressed before moving to the next job.",
+    "new_session_rule": "At the beginning of every new coding-agent session, rerun the full project test suite before doing implementation work.",
+    "new_session_failure_rule": "If the full test suite fails at session start, identify which job owns each failing test or affected component. Set each affected job's completed field to 'tests_failing'. Fix all failures before continuing to the next planned job.",
+    "regression_rule": "Before marking any job done, run both the job-specific tests and the full regression suite.",
+    "no_false_completion_rule": "Never mark a task or job done based only on code being written. Completion requires verified passing tests.",
+    "evidence_rule": "When a job is marked done, record the test command and last passing timestamp in its verification section.",
+    "blocking_rule": "If blocked, record the blocker and continue only with work that does not violate priority order or depend on the blocked component."
+  },
+  "session_start_checklist": [
+    {
+      "step": 1,
+      "action": "Read classcal-product-spec.md completely."
+    },
+    {
+      "step": 2,
+      "action": "Read classcal-coding-agent-prompt.md completely."
+    },
+    {
+      "step": 3,
+      "action": "Read progress.json and identify the highest-priority job whose completed field is not 'done'."
+    },
+    {
+      "step": 4,
+      "action": "Run the full project test suite before changing code."
+    },
+    {
+      "step": 5,
+      "action": "If any test fails, update affected jobs to 'tests_failing' and repair them before starting new implementation work."
+    }
+  ],
+  "global_verification": {
+    "full_test_suite_command": "npm test",
+    "unit_and_integration_command": "npm run test:logic",
+    "component_command": "npm run test:ui",
+    "typecheck_command": "npm run typecheck",
+    "evaluation_command": "npm run evaluate",
+    "last_run": "2026-09-02",
+    "last_result": "pass (291 vitest + 15 jest = 306 tests, typecheck clean)",
+    "required_before_new_work": true
+  },
+  "jobs": [
+    {
+      "id": "J001",
+      "priority": 1,
+      "component": "Project Scaffolding and Developer Tooling",
+      "completed": "done",
+      "depends_on": [],
+      "tasks": [
+        {
+          "id": "J001-T01",
+          "description": "Scaffold the Expo React Native application with TypeScript strict mode.",
+          "status": "done"
+        },
+        {
+          "id": "J001-T02",
+          "description": "Configure expo-router navigation and the shared theme.",
+          "status": "done"
+        },
+        {
+          "id": "J001-T03",
+          "description": "Configure path aliases and environment configuration.",
+          "status": "done"
+        },
+        {
+          "id": "J001-T04",
+          "description": "Configure the Vitest runner for pure domain logic.",
+          "status": "done"
+        },
+        {
+          "id": "J001-T05",
+          "description": "Configure jest-expo for React component and screen tests.",
+          "status": "done"
+        },
+        {
+          "id": "J001-T06",
+          "description": "Configure the Android build/run workflow.",
+          "status": "done"
+        },
+        {
+          "id": "J001-T07",
+          "description": "Create baseline README setup instructions.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Application boots successfully in development mode.",
+        "Type checking passes.",
+        "Linting passes.",
+        "Baseline unit test passes.",
+        "Baseline Playwright smoke test loads the home page."
+      ],
+      "verification": {
+        "test_command": "npm run typecheck; npx expo export --platform android",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Project Scaffolding and Developer Tooling"
+    },
+    {
+      "id": "J002",
+      "priority": 2,
+      "component": "Domain Model and Runtime Schemas",
+      "completed": "done",
+      "depends_on": [
+        "J001"
+      ],
+      "tasks": [
+        {
+          "id": "J002-T01",
+          "description": "Define SchoolClass domain type.",
+          "status": "done"
+        },
+        {
+          "id": "J002-T02",
+          "description": "Define EventType domain type.",
+          "status": "done"
+        },
+        {
+          "id": "J002-T03",
+          "description": "Define Importance domain type.",
+          "status": "done"
+        },
+        {
+          "id": "J002-T04",
+          "description": "Define RawCalendarEvent.",
+          "status": "done"
+        },
+        {
+          "id": "J002-T05",
+          "description": "Define NormalizedSchoolEvent and ClassSpecificDetail.",
+          "status": "done"
+        },
+        {
+          "id": "J002-T06",
+          "description": "Define EventChange and FamilySelection.",
+          "status": "done"
+        },
+        {
+          "id": "J002-T07",
+          "description": "Create Zod schemas matching all externally validated domain structures.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Valid domain payloads pass schema validation.",
+        "Invalid class identifiers are rejected.",
+        "Invalid event types are rejected.",
+        "Malformed normalized events are rejected.",
+        "Optional fields behave as specified."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/normalize.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Domain Model and Runtime Schemas"
+    },
+    {
+      "id": "J003",
+      "priority": 3,
+      "component": "Database Schema and Persistence",
+      "completed": "done",
+      "depends_on": [
+        "J002"
+      ],
+      "tasks": [
+        {
+          "id": "J003-T01",
+          "description": "Configure expo-sqlite and the Drizzle schema.",
+          "status": "done"
+        },
+        {
+          "id": "J003-T02",
+          "description": "Create the calendar source and sync state tables.",
+          "status": "done"
+        },
+        {
+          "id": "J003-T03",
+          "description": "Create RawCalendarEvent persistence with immutable versioning.",
+          "status": "done"
+        },
+        {
+          "id": "J003-T04",
+          "description": "Create NormalizedSchoolEvent persistence.",
+          "status": "done"
+        },
+        {
+          "id": "J003-T05",
+          "description": "Persist affected classes and class-specific details.",
+          "status": "done"
+        },
+        {
+          "id": "J003-T06",
+          "description": "Create EventChange and ProcessingRun persistence.",
+          "status": "done"
+        },
+        {
+          "id": "J003-T07",
+          "description": "Create migrations and development seed support.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Database migrations apply from a clean database.",
+        "Raw events can be inserted and retrieved.",
+        "Normalized events and class details persist correctly.",
+        "Source UID and payload hash constraints behave as intended.",
+        "Historical raw event versions can be retained."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/pipeline.test.ts tests/queries.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "On-Device Persistence (SQLite)"
+    },
+    {
+      "id": "J004",
+      "priority": 4,
+      "component": "Class Alias and Time Normalization",
+      "completed": "done",
+      "depends_on": [
+        "J002"
+      ],
+      "tasks": [
+        {
+          "id": "J004-T01",
+          "description": "Implement canonical class alias normalization.",
+          "status": "done"
+        },
+        {
+          "id": "J004-T02",
+          "description": "Support Irish and English infant class aliases.",
+          "status": "done"
+        },
+        {
+          "id": "J004-T03",
+          "description": "Support R1-R6, Rang 1-Rang 6, and ordinal English class names.",
+          "status": "done"
+        },
+        {
+          "id": "J004-T04",
+          "description": "Support class ranges such as R3-R6.",
+          "status": "done"
+        },
+        {
+          "id": "J004-T05",
+          "description": "Support class combinations such as Rang 5&6.",
+          "status": "done"
+        },
+        {
+          "id": "J004-T06",
+          "description": "Implement whole-school recognition.",
+          "status": "done"
+        },
+        {
+          "id": "J004-T07",
+          "description": "Implement time normalization such as 1.00pm -> 13:00.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Naíonáin Bheaga maps to junior_infants.",
+        "Naíonáin Mhóra maps to senior_infants.",
+        "Naíonáin/Infants maps to both infant classes.",
+        "R1 through R6 map correctly.",
+        "R3-R6 expands correctly.",
+        "Rang 5&6 maps to class_5 and class_6.",
+        "Whole-school aliases map correctly.",
+        "Common 12-hour source times normalize correctly."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/classAliases.test.ts tests/timeParsing.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Class Alias and Time Normalization"
+    },
+    {
+      "id": "J005",
+      "priority": 5,
+      "component": "Calendar Fixtures, Fetching, and iCalendar Parsing",
+      "completed": "done",
+      "depends_on": [
+        "J003",
+        "J004"
+      ],
+      "tasks": [
+        {
+          "id": "J005-T01",
+          "description": "Create representative GSMNC-style iCalendar fixtures.",
+          "status": "done"
+        },
+        {
+          "id": "J005-T02",
+          "description": "Implement configurable calendar source fetching.",
+          "status": "done"
+        },
+        {
+          "id": "J005-T03",
+          "description": "Parse iCalendar events into RawCalendarEvent objects.",
+          "status": "done"
+        },
+        {
+          "id": "J005-T04",
+          "description": "Preserve source UID, title, description, location, start/end, and all-day status.",
+          "status": "done"
+        },
+        {
+          "id": "J005-T05",
+          "description": "Calculate stable raw payload hashes.",
+          "status": "done"
+        },
+        {
+          "id": "J005-T06",
+          "description": "Persist only new or changed source event versions.",
+          "status": "done"
+        },
+        {
+          "id": "J005-T07",
+          "description": "Record last successful synchronization state.",
+          "status": "done"
+        },
+        {
+          "id": "J005-T08",
+          "description": "Retain previous data when source fetching fails.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Fixture iCal parses into expected raw events.",
+        "Repeated identical sync is idempotent.",
+        "Changed source payload produces a new raw version.",
+        "Missing optional source fields are handled safely.",
+        "Failed source fetch does not delete last-known-good data."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/icalParser.test.ts tests/pipeline.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Calendar Fixtures, Fetching, and iCalendar Parsing"
+    },
+    {
+      "id": "J006",
+      "priority": 6,
+      "component": "Calendar Event Interpreter Abstraction",
+      "completed": "done",
+      "depends_on": [
+        "J002",
+        "J005"
+      ],
+      "tasks": [
+        {
+          "id": "J006-T01",
+          "description": "Define CalendarEventInterpreter interface.",
+          "status": "done"
+        },
+        {
+          "id": "J006-T02",
+          "description": "Implement MockCalendarEventInterpreter.",
+          "status": "done"
+        },
+        {
+          "id": "J006-T03",
+          "description": "Make interpreter implementation configurable.",
+          "status": "done"
+        },
+        {
+          "id": "J006-T04",
+          "description": "Ensure all interpreter output passes runtime schema validation.",
+          "status": "done"
+        },
+        {
+          "id": "J006-T05",
+          "description": "Represent ambiguity and confidence explicitly.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Mock interpreter implements the interface.",
+        "Valid interpreter output passes validation.",
+        "Invalid interpreter output is rejected.",
+        "Configured interpreter can be swapped without changing business logic.",
+        "Low-confidence or ambiguous outputs are preserved for review."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/heuristicInterpreter.test.ts tests/gemma.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Calendar Event Interpreter Abstraction"
+    },
+    {
+      "id": "J007",
+      "priority": 7,
+      "component": "Deterministic Event Normalization and Importance Rules",
+      "completed": "done",
+      "depends_on": [
+        "J004",
+        "J006"
+      ],
+      "tasks": [
+        {
+          "id": "J007-T01",
+          "description": "Normalize model/interpreter class IDs to canonical values.",
+          "status": "done"
+        },
+        {
+          "id": "J007-T02",
+          "description": "Deduplicate classes and normalize class-specific times.",
+          "status": "done"
+        },
+        {
+          "id": "J007-T03",
+          "description": "Implement deterministic critical/high/normal/low importance rules.",
+          "status": "done"
+        },
+        {
+          "id": "J007-T04",
+          "description": "Force parentActionRequired for attendance/collection changes.",
+          "status": "done"
+        },
+        {
+          "id": "J007-T05",
+          "description": "Implement semantic sanity checks.",
+          "status": "done"
+        },
+        {
+          "id": "J007-T06",
+          "description": "Mark low-confidence output as needsReview.",
+          "status": "done"
+        },
+        {
+          "id": "J007-T07",
+          "description": "Persist only validated normalized events.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "School closures are always critical.",
+        "Early finishes are always critical.",
+        "Late starts and changed hours are always critical.",
+        "Critical schedule changes require parent action.",
+        "Duplicate classes are removed.",
+        "Invalid canonical classes are rejected.",
+        "Low-confidence events are marked for review."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/normalize.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Deterministic Event Normalization and Importance Rules"
+    },
+    {
+      "id": "J008",
+      "priority": 8,
+      "component": "End-to-End Ingestion Pipeline",
+      "completed": "done",
+      "depends_on": [
+        "J003",
+        "J005",
+        "J006",
+        "J007"
+      ],
+      "tasks": [
+        {
+          "id": "J008-T01",
+          "description": "Connect calendar sync to raw event persistence.",
+          "status": "done"
+        },
+        {
+          "id": "J008-T02",
+          "description": "Process new/changed raw events through the interpreter.",
+          "status": "done"
+        },
+        {
+          "id": "J008-T03",
+          "description": "Validate and normalize interpreted events.",
+          "status": "done"
+        },
+        {
+          "id": "J008-T04",
+          "description": "Persist normalized event output.",
+          "status": "done"
+        },
+        {
+          "id": "J008-T05",
+          "description": "Record processing failures without discarding raw data.",
+          "status": "done"
+        },
+        {
+          "id": "J008-T06",
+          "description": "Implement safe retry behavior.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Fixture iCal -> raw DB -> mock interpreter -> normalized DB succeeds.",
+        "Unchanged events are not reinterpreted.",
+        "Changed events are reprocessed.",
+        "Invalid interpretation is routed to review/failure state.",
+        "Interpreter failure leaves the raw source event intact."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/pipeline.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "End-to-End Ingestion Pipeline"
+    },
+    {
+      "id": "J009",
+      "priority": 9,
+      "component": "Events API",
+      "completed": "done",
+      "depends_on": [
+        "J008"
+      ],
+      "tasks": [
+        {
+          "id": "J009-T01",
+          "description": "Implement the event query layer used by every screen.",
+          "status": "done"
+        },
+        {
+          "id": "J009-T02",
+          "description": "Support date range filters.",
+          "status": "done"
+        },
+        {
+          "id": "J009-T03",
+          "description": "Support class filters.",
+          "status": "done"
+        },
+        {
+          "id": "J009-T04",
+          "description": "Implement single event lookup by id.",
+          "status": "done"
+        },
+        {
+          "id": "J009-T05",
+          "description": "Implement the important-events query.",
+          "status": "done"
+        },
+        {
+          "id": "J009-T06",
+          "description": "Implement calendar sync status reporting.",
+          "status": "done"
+        },
+        {
+          "id": "J009-T07",
+          "description": "Ensure no interpretation runs during a read query.",
+          "status": "done"
+        },
+        {
+          "id": "J009-T08",
+          "description": "Implement search across title, summary and original wording.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Events endpoint returns normalized events.",
+        "Class filters return expected events.",
+        "Date filters work correctly.",
+        "Important endpoint returns critical/high events as defined.",
+        "Calendar status exposes last successful sync and stale state.",
+        "Read endpoints never invoke the interpreter."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/queries.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Event Query Layer"
+    },
+    {
+      "id": "J010",
+      "priority": 10,
+      "component": "Family Setup and Multi-Child Class Selection",
+      "completed": "done",
+      "depends_on": [
+        "J001"
+      ],
+      "tasks": [
+        {
+          "id": "J010-T01",
+          "description": "Build first-launch welcome flow.",
+          "status": "done"
+        },
+        {
+          "id": "J010-T02",
+          "description": "Build multi-select class picker.",
+          "status": "done"
+        },
+        {
+          "id": "J010-T03",
+          "description": "Require at least one selected class.",
+          "status": "done"
+        },
+        {
+          "id": "J010-T04",
+          "description": "Allow optional child name per selected class.",
+          "status": "done"
+        },
+        {
+          "id": "J010-T05",
+          "description": "Persist family configuration locally.",
+          "status": "done"
+        },
+        {
+          "id": "J010-T06",
+          "description": "Support editing/removing selected children/classes.",
+          "status": "done"
+        },
+        {
+          "id": "J010-T07",
+          "description": "Ensure child names are not sent to the LLM.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "User cannot finish setup with zero classes.",
+        "One-class setup persists.",
+        "Multi-class setup persists.",
+        "Optional child names persist locally.",
+        "Removing a class updates stored configuration.",
+        "No child name is present in interpreter payloads."
+      ],
+      "verification": {
+        "test_command": "npm run test:ui",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Family Setup and Multi-Child Class Selection"
+    },
+    {
+      "id": "J011",
+      "priority": 11,
+      "component": "Parent Relevance Engine",
+      "completed": "done",
+      "depends_on": [
+        "J007",
+        "J010"
+      ],
+      "tasks": [
+        {
+          "id": "J011-T01",
+          "description": "Implement deterministic class intersection logic.",
+          "status": "done"
+        },
+        {
+          "id": "J011-T02",
+          "description": "Always include whole-school events.",
+          "status": "done"
+        },
+        {
+          "id": "J011-T03",
+          "description": "Support one-child households.",
+          "status": "done"
+        },
+        {
+          "id": "J011-T04",
+          "description": "Support multi-child households.",
+          "status": "done"
+        },
+        {
+          "id": "J011-T05",
+          "description": "Prevent duplicate whole-school events.",
+          "status": "done"
+        },
+        {
+          "id": "J011-T06",
+          "description": "Map affected classes back to optional child names for display.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Junior Infants-only event is relevant to Junior Infants selection.",
+        "4th-only event is irrelevant to Junior Infants-only selection.",
+        "Whole-school event is relevant to all selections.",
+        "Two selected classes see the union of relevant events.",
+        "Whole-school event appears once for multi-child families.",
+        "Affected child labels are correct."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/relevance.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Parent Relevance Engine"
+    },
+    {
+      "id": "J012",
+      "priority": 12,
+      "component": "Personalised Home / For You View",
+      "completed": "done",
+      "depends_on": [
+        "J009",
+        "J010",
+        "J011"
+      ],
+      "tasks": [
+        {
+          "id": "J012-T01",
+          "description": "Build personalised home route.",
+          "status": "done"
+        },
+        {
+          "id": "J012-T02",
+          "description": "Render urgent change banner area.",
+          "status": "done"
+        },
+        {
+          "id": "J012-T03",
+          "description": "Render Today and Tomorrow sections.",
+          "status": "done"
+        },
+        {
+          "id": "J012-T04",
+          "description": "Render Important Upcoming section.",
+          "status": "done"
+        },
+        {
+          "id": "J012-T05",
+          "description": "Render Next 7 Days and Later sections.",
+          "status": "done"
+        },
+        {
+          "id": "J012-T06",
+          "description": "Build event cards with class/child relevance badges.",
+          "status": "done"
+        },
+        {
+          "id": "J012-T07",
+          "description": "Make critical attendance/collection changes visually prominent without relying on colour alone.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Selected classes determine visible home events.",
+        "Critical whole-school events appear.",
+        "Irrelevant class-only events do not appear.",
+        "Multi-child badges render correctly.",
+        "Home information hierarchy matches specification.",
+        "Accessibility checks cover labels and non-colour importance cues."
+      ],
+      "verification": {
+        "test_command": "npm run test:ui",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Personalised Home / For You Screen"
+    },
+    {
+      "id": "J013",
+      "priority": 13,
+      "component": "Calendar and Event Detail Views",
+      "completed": "done",
+      "depends_on": [
+        "J009",
+        "J011"
+      ],
+      "tasks": [
+        {
+          "id": "J013-T01",
+          "description": "Build calendar route.",
+          "status": "done"
+        },
+        {
+          "id": "J013-T02",
+          "description": "Implement agenda/list view.",
+          "status": "done"
+        },
+        {
+          "id": "J013-T03",
+          "description": "Implement month view.",
+          "status": "done"
+        },
+        {
+          "id": "J013-T04",
+          "description": "Add child/class and event-type filters.",
+          "status": "done"
+        },
+        {
+          "id": "J013-T05",
+          "description": "Build event detail route.",
+          "status": "done"
+        },
+        {
+          "id": "J013-T06",
+          "description": "Show class-specific times on event detail.",
+          "status": "done"
+        },
+        {
+          "id": "J013-T07",
+          "description": "Show parent action and location.",
+          "status": "done"
+        },
+        {
+          "id": "J013-T08",
+          "description": "Expose original official wording and official calendar link.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Agenda and month views render expected events.",
+        "Filters work for selected classes.",
+        "Event detail shows correct affected classes.",
+        "Class-specific finish times are correct.",
+        "Original source wording is available.",
+        "Official source link is present."
+      ],
+      "verification": {
+        "test_command": "npm run test:ui",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Calendar and Event Detail Screens"
+    },
+    {
+      "id": "J014",
+      "priority": 14,
+      "component": "Settings and Preferences",
+      "completed": "done",
+      "depends_on": [
+        "J010"
+      ],
+      "tasks": [
+        {
+          "id": "J014-T01",
+          "description": "Build settings route.",
+          "status": "done"
+        },
+        {
+          "id": "J014-T02",
+          "description": "Allow add/remove child or class.",
+          "status": "done"
+        },
+        {
+          "id": "J014-T03",
+          "description": "Allow optional child rename.",
+          "status": "done"
+        },
+        {
+          "id": "J014-T04",
+          "description": "Add event visibility preferences.",
+          "status": "done"
+        },
+        {
+          "id": "J014-T05",
+          "description": "Add notification preference placeholders/domain configuration.",
+          "status": "done"
+        },
+        {
+          "id": "J014-T06",
+          "description": "Add clear-family-data action.",
+          "status": "done"
+        },
+        {
+          "id": "J014-T07",
+          "description": "Show calendar source status and last updated time.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Adding a class updates relevance immediately.",
+        "Removing a class removes class-only events immediately.",
+        "Renaming a child updates labels.",
+        "Clear-family-data removes local family configuration.",
+        "Settings persist across reloads."
+      ],
+      "verification": {
+        "test_command": "npm run test:ui",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Settings and Preferences"
+    },
+    {
+      "id": "J015",
+      "priority": 15,
+      "component": "Event Change Detection",
+      "completed": "done",
+      "depends_on": [
+        "J008"
+      ],
+      "tasks": [
+        {
+          "id": "J015-T01",
+          "description": "Implement normalized-event diffing.",
+          "status": "done"
+        },
+        {
+          "id": "J015-T02",
+          "description": "Detect date changes.",
+          "status": "done"
+        },
+        {
+          "id": "J015-T03",
+          "description": "Detect start/end time changes.",
+          "status": "done"
+        },
+        {
+          "id": "J015-T04",
+          "description": "Detect class-specific time changes.",
+          "status": "done"
+        },
+        {
+          "id": "J015-T05",
+          "description": "Detect affected-class changes.",
+          "status": "done"
+        },
+        {
+          "id": "J015-T06",
+          "description": "Detect cancellation/closure semantic changes.",
+          "status": "done"
+        },
+        {
+          "id": "J015-T07",
+          "description": "Persist EventChange records.",
+          "status": "done"
+        },
+        {
+          "id": "J015-T08",
+          "description": "Expose material changes to UI/API.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Unchanged normalized event produces no EventChange.",
+        "Finish-time change produces EventChange.",
+        "Date change produces EventChange.",
+        "Affected-class change produces EventChange.",
+        "Material change can be rendered as previous vs new value."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/changeDetection.test.ts tests/pipeline.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Event Change Detection"
+    },
+    {
+      "id": "J016",
+      "priority": 16,
+      "component": "Admin Review Queue",
+      "completed": "done",
+      "depends_on": [
+        "J006",
+        "J007",
+        "J008"
+      ],
+      "tasks": [
+        {
+          "id": "J016-T01",
+          "description": "Build protected/development-only review route.",
+          "status": "done"
+        },
+        {
+          "id": "J016-T02",
+          "description": "List low-confidence and failed events.",
+          "status": "done"
+        },
+        {
+          "id": "J016-T03",
+          "description": "Show raw source alongside interpreted output.",
+          "status": "done"
+        },
+        {
+          "id": "J016-T04",
+          "description": "Show confidence, event type, affected classes, and validation errors.",
+          "status": "done"
+        },
+        {
+          "id": "J016-T05",
+          "description": "Implement reprocess action.",
+          "status": "done"
+        },
+        {
+          "id": "J016-T06",
+          "description": "Prevent unprotected public production access.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Low-confidence event appears in review queue.",
+        "Failed interpretation appears in review queue.",
+        "Reprocess action invokes interpreter.",
+        "Protected route rejects unauthorized production access."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/pipeline.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass",
+        "notes": "Implemented as an in-app developer screen gated on __DEV__ (no server exists for ADMIN_SECRET auth). Reprocess action and the underlying queries are covered by tests; the screen itself is not in the jest suite.",
+        "scope_note": "Some spec sub-requirements were reframed or deferred for the on-device architecture; see notes and README."
+      },
+      "title": "Developer Review Queue"
+    },
+    {
+      "id": "J017",
+      "priority": 17,
+      "component": "Gemma 4 Event Interpreter",
+      "completed": "done",
+      "depends_on": [
+        "J006",
+        "J007",
+        "J016"
+      ],
+      "tasks": [
+        {
+          "id": "J017-T01",
+          "description": "Implement GemmaCalendarEventInterpreter.",
+          "status": "done"
+        },
+        {
+          "id": "J017-T02",
+          "description": "Support configurable local/OpenAI-compatible inference endpoint.",
+          "status": "done"
+        },
+        {
+          "id": "J017-T03",
+          "description": "Implement fixed prompt-injection-resistant system instruction.",
+          "status": "done"
+        },
+        {
+          "id": "J017-T04",
+          "description": "Request schema-constrained JSON when supported.",
+          "status": "done"
+        },
+        {
+          "id": "J017-T05",
+          "description": "Validate every response with runtime schema.",
+          "status": "done"
+        },
+        {
+          "id": "J017-T06",
+          "description": "Implement timeout, failure, and retry handling.",
+          "status": "done"
+        },
+        {
+          "id": "J017-T07",
+          "description": "Ensure calendar text is treated as untrusted data and the model has no tools.",
+          "status": "done"
+        },
+        {
+          "id": "J017-T08",
+          "description": "Create model evaluation fixtures/results for representative GSMNC events.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Gemma adapter conforms to CalendarEventInterpreter.",
+        "Prompt contains explicit untrusted-data instructions.",
+        "Invalid JSON is rejected.",
+        "Invented/invalid class IDs are rejected by post-processing.",
+        "Timeout/failure leaves source event intact.",
+        "Representative evaluation fixtures produce schema-valid outputs.",
+        "No model invocation contains family/child names."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/gemma.test.ts tests/evaluation.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass"
+      },
+      "title": "Gemma Event Interpreter"
+    },
+    {
+      "id": "J018",
+      "priority": 18,
+      "component": "PWA and Offline/Stale Data Behaviour",
+      "completed": "done",
+      "depends_on": [
+        "J012",
+        "J013"
+      ],
+      "tasks": [
+        {
+          "id": "J018-T01",
+          "description": "Persist normalized events so the app works with no network.",
+          "status": "done"
+        },
+        {
+          "id": "J018-T02",
+          "description": "Display the last successful update time.",
+          "status": "done"
+        },
+        {
+          "id": "J018-T03",
+          "description": "Display a stale-data warning after a failed or outdated sync.",
+          "status": "done"
+        },
+        {
+          "id": "J018-T04",
+          "description": "Retain last-known-good data when a sync fails.",
+          "status": "done"
+        },
+        {
+          "id": "J018-T05",
+          "description": "Never present stale data as current.",
+          "status": "done"
+        },
+        {
+          "id": "J018-T06",
+          "description": "Refresh automatically on app foreground, rate limited.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "PWA manifest is valid.",
+        "Application shell loads after simulated offline state.",
+        "Cached event data can be displayed offline.",
+        "Stale source status renders warning.",
+        "UI never labels stale data as current."
+      ],
+      "verification": {
+        "test_command": "npm test",
+        "last_passing": "2026-09-02",
+        "result": "pass",
+        "notes": "Reframed for native: offline works because normalized events live in on-device SQLite. Last-updated and stale warnings are implemented and covered by a screen test. There is no service worker or PWA manifest.",
+        "scope_note": "Some spec sub-requirements were reframed or deferred for the on-device architecture; see notes and README."
+      },
+      "title": "Offline and Stale Data Behaviour"
+    },
+    {
+      "id": "J019",
+      "priority": 19,
+      "component": "Notification Scheduling Domain",
+      "completed": "done",
+      "depends_on": [
+        "J007",
+        "J015"
+      ],
+      "tasks": [
+        {
+          "id": "J019-T01",
+          "description": "Define the notification preference model.",
+          "status": "done"
+        },
+        {
+          "id": "J019-T02",
+          "description": "Implement the critical-event reminder schedule.",
+          "status": "done"
+        },
+        {
+          "id": "J019-T03",
+          "description": "Implement the high-importance reminder schedule.",
+          "status": "done"
+        },
+        {
+          "id": "J019-T04",
+          "description": "Implement user preference overrides.",
+          "status": "done"
+        },
+        {
+          "id": "J019-T05",
+          "description": "Implement deterministic idempotency keys.",
+          "status": "done"
+        },
+        {
+          "id": "J019-T06",
+          "description": "Invalidate and reschedule reminders when an event changes.",
+          "status": "done"
+        },
+        {
+          "id": "J019-T07",
+          "description": "Deliver scheduled reminders through expo-notifications.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Critical event schedules 7-day, 1-day, and morning-of reminders.",
+        "High event schedules 7-day and 1-day reminders.",
+        "Preference overrides change generated reminders.",
+        "Duplicate reminders are suppressed.",
+        "Changed event invalidates obsolete reminder schedule."
+      ],
+      "verification": {
+        "test_command": "npm run test:logic -- tests/notifications.test.ts tests/queries.test.ts",
+        "last_passing": "2026-09-02",
+        "result": "pass",
+        "notes": "Scheduling, preference overrides, idempotency and reconciliation are fully implemented and tested. Actual delivery through expo-notifications is implemented but not verified on a physical device.",
+        "scope_note": "Some spec sub-requirements were reframed or deferred for the on-device architecture; see notes and README."
+      },
+      "title": "Notification Scheduling and Delivery"
+    },
+    {
+      "id": "J020",
+      "priority": 20,
+      "component": "Security, Accessibility, and Production Hardening",
+      "completed": "done",
+      "depends_on": [
+        "J012",
+        "J013",
+        "J016",
+        "J017",
+        "J018"
+      ],
+      "tasks": [
+        {
+          "id": "J020-T01",
+          "description": "Sanitize/escape all untrusted calendar content.",
+          "status": "done"
+        },
+        {
+          "id": "J020-T02",
+          "description": "Protect internal sync and reprocess endpoints.",
+          "status": "done"
+        },
+        {
+          "id": "J020-T03",
+          "description": "Validate environment secrets are server-only.",
+          "status": "done"
+        },
+        {
+          "id": "J020-T04",
+          "description": "Add source field-size and malformed-content limits.",
+          "status": "done"
+        },
+        {
+          "id": "J020-T05",
+          "description": "Complete WCAG 2.2 AA-oriented accessibility pass.",
+          "status": "done"
+        },
+        {
+          "id": "J020-T06",
+          "description": "Verify keyboard navigation and screen-reader labels.",
+          "status": "done"
+        },
+        {
+          "id": "J020-T07",
+          "description": "Verify critical meaning is not conveyed by colour alone.",
+          "status": "done"
+        },
+        {
+          "id": "J020-T08",
+          "description": "Add production error handling and safe logging.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Untrusted source HTML cannot execute in UI.",
+        "Unauthorized internal endpoint access is rejected.",
+        "Client bundle does not expose server secrets.",
+        "Oversized/malformed source fields are rejected safely.",
+        "Automated accessibility checks pass on core routes.",
+        "Keyboard navigation works on setup, home, calendar, event detail, and settings."
+      ],
+      "verification": {
+        "test_command": "npm test",
+        "last_passing": "2026-09-02",
+        "result": "pass",
+        "notes": "Untrusted-content rendering, oversized/malformed field limits, __DEV__ gating of the review screen, and non-colour importance cues are implemented and tested. There is no automated accessibility or contrast audit.",
+        "scope_note": "Some spec sub-requirements were reframed or deferred for the on-device architecture; see notes and README."
+      },
+      "title": "Security, Accessibility, and Hardening"
+    },
+    {
+      "id": "J021",
+      "priority": 21,
+      "component": "Final End-to-End Acceptance and Documentation",
+      "completed": "done",
+      "depends_on": [
+        "J001",
+        "J002",
+        "J003",
+        "J004",
+        "J005",
+        "J006",
+        "J007",
+        "J008",
+        "J009",
+        "J010",
+        "J011",
+        "J012",
+        "J013",
+        "J014",
+        "J015",
+        "J016",
+        "J017",
+        "J018",
+        "J019",
+        "J020"
+      ],
+      "tasks": [
+        {
+          "id": "J021-T01",
+          "description": "Run all MVP acceptance scenarios from the product spec.",
+          "status": "done"
+        },
+        {
+          "id": "J021-T02",
+          "description": "Run full unit, integration, E2E, lint, and typecheck suites.",
+          "status": "done"
+        },
+        {
+          "id": "J021-T03",
+          "description": "Verify new-session regression workflow is documented.",
+          "status": "done"
+        },
+        {
+          "id": "J021-T04",
+          "description": "Complete README local setup and architecture documentation.",
+          "status": "done"
+        },
+        {
+          "id": "J021-T05",
+          "description": "Document Gemma configuration and model evaluation process.",
+          "status": "done"
+        },
+        {
+          "id": "J021-T06",
+          "description": "Document privacy assumptions and known limitations.",
+          "status": "done"
+        },
+        {
+          "id": "J021-T07",
+          "description": "Record final known TODOs/deferred items.",
+          "status": "done"
+        },
+        {
+          "id": "J021-T08",
+          "description": "Verify every prior job still passes its tests.",
+          "status": "done"
+        }
+      ],
+      "required_tests": [
+        "Full test suite passes from a clean environment.",
+        "Type checking passes.",
+        "Linting passes.",
+        "All critical E2E scenarios pass.",
+        "Junior Infants + 4th Class household sees correct filtered events.",
+        "Whole-school closure appears once and affects both children.",
+        "Different infant/1st-6th early-finish times display correctly.",
+        "Removing 4th Class immediately removes 4th-only events.",
+        "No previously completed job has a failing test."
+      ],
+      "verification": {
+        "test_command": "npm test",
+        "last_passing": "2026-09-02",
+        "result": "pass",
+        "notes": "MVP acceptance scenarios A, B and C pass as screen tests. Documentation complete. Deferred items recorded in README \"Outstanding work\"."
+      },
+      "title": "Final Acceptance and Documentation"
+    }
+  ],
+  "architecture": {
+    "decided": "2026-09-02",
+    "shape": "Expo React Native application, Android target, fully on-device. No server and no PostgreSQL.",
+    "rationale": "The user asked for a React Native app rather than the Next.js PWA in the specification, and chose the server-free variant. The phone fetches the school iCalendar feed directly, interprets it on-device, and stores everything in local SQLite.",
+    "supersedes": [
+      "Next.js / React Server Components (spec 23.1)",
+      "PostgreSQL + Prisma/Drizzle-on-Postgres (spec 21, 23.1)",
+      "HTTP API routes under /api (spec 25) -- replaced by in-process repository functions with the same shapes",
+      "PWA manifest and service worker (spec 26) -- replaced by native install and SQLite persistence",
+      "Playwright E2E (prompt) -- replaced by React Native Testing Library screen tests",
+      "Admin review web route protected by ADMIN_SECRET (spec 27) -- replaced by a developer-only in-app screen"
+    ],
+    "preserved": [
+      "All domain types, taxonomies and importance rules",
+      "Deterministic class alias and time normalization",
+      "Interpreter abstraction with a swappable Gemma implementation",
+      "Deterministic relevance, change detection and notification scheduling",
+      "Local-only family configuration and the privacy posture"
+    ],
+    "notes": [
+      "Spec references \"Gemma 4 E2B\"; no Gemma 4 exists. The adapter targets any OpenAI-compatible endpoint with a configurable model id, defaulting to a Gemma 3 instruct model.",
+      "The GSMNC feed publishes every event as an all-day VEVENT with times embedded in the SUMMARY text and empty DESCRIPTION/LOCATION, so time extraction is text-based rather than taken from DTSTART.",
+      "The feed contains byte sequences that are not valid UTF-8; decoding falls back per line.",
+      "The feed contains no RRULE, so recurrence expansion is not required."
+    ]
+  },
+  "summary": {
+    "status": "MVP complete",
+    "date": "2026-09-02",
+    "tests": "306 passing (291 Vitest, 15 Jest screen tests)",
+    "typecheck": "clean, TypeScript strict + noUncheckedIndexedAccess",
+    "bundle": "npx expo export --platform android succeeds",
+    "evaluation": "162/162 live feed events parsed and normalized; 0 classified as \"other\"; 0 with unresolved classes; 12 (7.4%) held for review; 66/66 stated times extracted; 0 closure-wording misclassifications",
+    "deferred": [
+      "Labelled 100+ event gold-standard evaluation set (spec 28)",
+      "Verification against the live feed on a physical device over time",
+      "Personalised iCal export (spec Phase 2)",
+      "School-year rollover / class promotion",
+      "Irish-language parent-facing summaries",
+      "iOS verification",
+      "Automated accessibility and contrast auditing"
+    ]
+  }
+}

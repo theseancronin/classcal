@@ -1,0 +1,64 @@
+{
+  "name": "classcal",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.19",
+    "expo-constants": "~57.0.17",
+    "expo-device": "~57.0.1",
+    "expo-linking": "~57.0.9",
+    "expo-notifications": "~57.0.16",
+    "expo-router": "~57.0.18",
+    "expo-sqlite": "~57.0.2",
+    "expo-status-bar": "~57.0.1",
+    "ical.js": "^2.2.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@react-native/jest-preset": "^0.86.3",
+    "@testing-library/react-native": "^13.3.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.4.1",
+    "@types/react": "~19.2.2",
+    "jest": "^30.5.1",
+    "jest-expo": "^57.0.5",
+    "react-test-renderer": "^19.2.3",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.11"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "vitest run && jest",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "evaluate": "vitest run tests/evaluation.test.ts --reporter=basic",
+    "test:logic": "vitest run",
+    "test:ui": "jest"
+  },
+  "private": true,
+  "jest": {
+    "preset": "jest-expo",
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests-ui/setup.ts"
+    ],
+    "testMatch": [
+      "<rootDir>/tests-ui/**/*.test.tsx"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg))"
+    ]
+  }
+}

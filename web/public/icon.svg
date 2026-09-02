@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ClassCal">
+  <rect width="512" height="512" rx="112" fill="#1F4E5F"/>
+  <rect x="96" y="128" width="320" height="288" rx="32" fill="#FBF9F6"/>
+  <rect x="96" y="128" width="320" height="72" rx="32" fill="#E8F0F2"/>
+  <rect x="96" y="176" width="320" height="24" fill="#E8F0F2"/>
+  <rect x="160" y="96" width="32" height="80" rx="16" fill="#1A1815"/>
+  <rect x="320" y="96" width="32" height="80" rx="16" fill="#1A1815"/>
+  <circle cx="176" cy="264" r="24" fill="#C8BFB2"/>
+  <circle cx="256" cy="264" r="24" fill="#C8BFB2"/>
+  <circle cx="336" cy="264" r="24" fill="#C8BFB2"/>
+  <circle cx="176" cy="344" r="24" fill="#C8BFB2"/>
+  <circle cx="256" cy="344" r="32" fill="#A8261C"/>
+  <circle cx="336" cy="344" r="24" fill="#C8BFB2"/>
+</svg>

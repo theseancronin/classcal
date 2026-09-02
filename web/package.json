@@ -10,9 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "evaluate": "vitest run tests/evaluation.test.ts --reporter=basic",
+    "evaluate": "vitest run tests/evaluation.test.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "smoke": "vitest run --config vitest.smoke.mts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
